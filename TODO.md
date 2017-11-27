@@ -21,7 +21,7 @@ Additional functionality (high priority)
 ----------------------------------------
 
 * `template` command to generate a fresh pipeline file **DONE**
-* `--dry-run` option to show commands executed instead of running them
+* `--dry-run` option to show commands executed instead of running them **DONE**
 * Require top-level `sudo`
     * Detect elevation in code
     * Review use of `subprocess.call`'s `shell` argument
