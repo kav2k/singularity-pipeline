@@ -2,21 +2,14 @@
 # -*- coding: utf-8 -*-
 """Pipeline, a wrapper around Singularity to build, run and test scientific pipelines."""
 
-from __future__ import print_function
-
-import colorama
-import argparse
 import os
 import string
 import subprocess
-import sys
 import yaml
 import re
 
-from eprint import EPrint
-
-SUPPORTED_VERSION = "2.4"
-FORMAT_VERSION = 1
+from .eprint import EPrint
+from .constants import SUPPORTED_VERSION, FORMAT_VERSION
 
 
 class Pipeline():
@@ -305,97 +298,6 @@ def check_singularity():
         raise ToolError("Unexpected format for Singularity version string ({})".format(version))
 
 
-def __main():
-    """Main method to be called when running directly.
-
-    Expects CLI arguments."""
-    colorama.init()
-    eprint = EPrint()
-
-    args = parse_args(sys.argv[1:])
-
-    if args.command == "template":
-        print(template_pipeline)
-        exit(0)
-
-    try:
-        check_singularity()
-    except ToolError as e:
-        eprint.red("Error when running `singularity`: {}".format(e.error))
-        eprint.yellow("Check your Singularity installation!")
-        sys.exit(1)
-
-    try:
-        try:
-            with open(args.pipeline) as f:
-                pipeline = Pipeline(f, imagefile=args.image, eprint_instance=eprint, dry_run=args.dry_run)
-        except IOError as e:
-            eprint.red("\nCannot open pipeline description {0}: {1}".format(args.pipeline, e.strerror))
-            raise LoadError()
-    except LoadError:
-        eprint.yellow("\nUnable to load pipeline description. Aborting.")
-        sys.exit(1)
-
-    try:
-        if args.command == "build":
-            pipeline.build(force=args.force)
-        elif args.command == "run":
-            pipeline.run()
-        elif args.command == "test":
-            pipeline.test(force=args.force, skip_run=args.skip_run)
-        elif args.command == "check":
-            pipeline.check()
-        else:
-            raise RuntimeError("Unknown command specified")
-    except RuntimeError as e:
-        eprint.red("ERROR: {}".format(e))
-        sys.exit(1)
-
-
-def parse_args(args):
-    parser = argparse.ArgumentParser(
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        description="Pipeline, a wrapper around Singularity to build, run and test scientific pipelines."
-    )
-
-    parser.add_argument(
-        "command",
-        help="Command to execute",
-        choices=['build', 'run', 'test', 'check', 'template']
-    )
-    parser.add_argument(
-        "-p", "--pipeline",
-        default="pipeline.yaml",
-        help="Pipeline description file (default: '%(default)s')"
-    )
-    parser.add_argument(
-        "-i", "--image",
-        help="Singularity image file (default: as defined in pipeline description)"
-    )
-    parser.add_argument(
-        "-f", "--force",
-        action="store_true",
-        help="Force rebuilding the image or test data for validation (default: no)"
-    )
-    parser.add_argument(
-        "--no-bind",
-        action="store_true",
-        help="Omit runtime bind arguments (default: no). Useful in cases when user-supplied path binding is not allowed."
-    )
-    parser.add_argument(
-        "--skip-run",
-        action="store_true",
-        help="For testing, skip the run phase, only validating existing output (default: no)"
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Output the intended command sequence without executing it (default: no)"
-    )
-
-    return parser.parse_args(args)
-
-
 def make_safe_filename(name, lower=False):
     """Convert filename-unsafe characters to '_'.
 
@@ -435,81 +337,3 @@ class ToolError(RuntimeError):
     def __str__(self):
         """Print out specific error description as string representation."""
         return self.error
-
-
-template_pipeline = r'''## Those will be used in default image name
-format_version: 1
-
-name: CowSay
-version: 1
-
-## Those are purely informative at the moment
-author: Alexander Kashev
-author_org: UniBe
-source:
-
-## Extra substitutions for commands
-## {image} is always available; in some contexts,
-## To use literal {foo} in commands, double the braces: {{foo}}
-substitutions:
-  text: "Moo"
-
-## Bind specifications (souce:destination) to be passed to Singularity
-binds:
-  - "/var/tmp:/var/tmp"
-
-## Build instructions
-build:
-  ## Currently supported: bootstrap (will run sudo), pull, docker2singularity, custom
-  type: pull
-
-  ## Size in MB; optional for pull
-  size: 512
-
-  ## Extra options to pass to corresponding singularity build command; string
-  # options: "--some-option"
-
-  ## For bootstrap, should be a local Singularity file
-  ## For pull, shub / docker URL
-  ## For docker2singularity, should be a local Dockerfile file
-  source: docker://chuanwen/cowsay
-
-  ## Only for build type "custom".
-  ## Additional substitutions: {source}, {size} (as "--size XXX") and {options}
-  # commands:
-  # - "singularity ..."
-
-  ## Credentials for docker regsiteries
-  ## Passed to singularity as environment variables
-  # credentials:
-  #   username: foo
-  #   password: bar
-
-
-## Run instructions
-run:
-  ## An array of scripts to be executed in shell
-  ## Preset substitutions:
-  ## * {exec}  for "singularity exec [-B <bind specification>] <image name>"
-  ## * {run}   for "singularity run [-B <bind specification>] <image name>"
-  ## * {binds} for "[-B <bind specification>]"
-  ## * {image} for container file name
-  ##  will be substituted; for literal {} (e.g. shell) use {{}}
-  commands:
-    - "{exec} /usr/games/cowsay {text} > cowsay.txt 2> /dev/null"
-
-## Test instructions
-test:
-  ## Files required for testing; will run prepare_commands if any doesn't exist or --force specified
-  test_files:
-    - cowsay.md5
-  ## An array of scripts to be executed in shell to prepare test_files
-  prepare_commands:
-    - "echo '548c5e52a6c1abc728a6b8e27f5abdd4  cowsay.txt' > cowsay.md5"
-  ## An array of scripts to be executed in shell after running
-  validate_commands:
-    - "md5sum -c cowsay.md5"'''
-
-
-if __name__ == "__main__":
-    __main()
