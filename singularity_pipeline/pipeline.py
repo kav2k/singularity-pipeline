@@ -4,22 +4,31 @@
 
 from __future__ import print_function
 
+import colorama
 import argparse
 import os
 import string
 import subprocess
 import sys
 import yaml
+import re
+
+from eprint import EPrint
+
+SUPPORTED_VERSION = "2.4"
+FORMAT_VERSION = 1
 
 
 class Pipeline():
     """Main Pipeline class."""
 
-    def __init__(self, source, imagefile=None, print_func=print, dry_run=False):
+    def __init__(self, source, imagefile=None, eprint_instance=None, dry_run=False):
         """Initialize a pipeline instance.
 
         Requires a YAML-formatted description (string or file handle)."""
-        self.print_func = print_func
+        if not eprint_instance:
+            eprint_instance = EPrint()
+        self.eprint = eprint_instance
         self.dry_run = dry_run
 
         self.load_description(source)
@@ -31,11 +40,11 @@ class Pipeline():
                 "{}-{}.img".format(self.description.get("name"), self.description.get("version"))
             )
 
-        self.print_func("Target image file: {}".format(self.imagefile))
+        self.eprint.normal("Target image file: {}\n".format(self.imagefile))
 
     def load_description(self, source):
         """Load pipeline description from a file or a YAML string."""
-        self.print_func("Loading pipeline description...")
+        self.eprint.bold("# Loading pipeline description...")
         try:
             self.description = yaml.safe_load(source)
             self.validate_description(self.description)
@@ -45,34 +54,40 @@ class Pipeline():
                 (spec.split(":")[0], spec.split(":")[1]) for spec in bind_specs
             ]
 
-            self.print_func("Pipeline '{name}' {version} loaded.".format(
+            self.eprint.normal("Pipeline '{name}' version {version} loaded.".format(
                 name=self.description.get("name"),
                 version=self.description.get("version")
             ))
         except yaml.YAMLError as e:
-            self.print_func("Error parsing pipeline description: {0}".format(e))
+            self.eprint.red("\nError parsing pipeline description: {0}".format(e))
             raise LoadError()
         except FormatError as e:
-            self.print_func("Pipeline description error: {0}".format(e))
+            self.eprint.red("\nPipeline description error: {0}".format(e))
             raise LoadError()
 
     def validate_description(self, description):
         """Validate dict-parsed pipeline description."""
+        format_version = description.get("format_version")
+        if not format_version:
+            raise FormatError("Format version not specified; expected {}".format(FORMAT_VERSION))
+        elif format_version != FORMAT_VERSION:
+            raise FormatError("Incompatible format version {}; expected {}".format(format_version, FORMAT_VERSION))
+
         for attribute in ["name", "version", "build", "run", "test"]:
-            if not self.description.get(attribute):
+            if not description.get(attribute):
                 raise FormatError("Missing attribute '{}'".format(attribute))
 
     def build(self, force=False):
         """Build pipeline according to description."""
-        self.print_func("# Building pipeline...\n")
+        self.eprint.bold("# Building pipeline...\n")
 
         if not self.dry_run:
             if os.path.exists(self.imagefile):
                 if force:
-                    self.print_func("Deleting existing image file {}.".format(self.imagefile))
+                    self.eprint.normal("Deleting existing image file {}.".format(self.imagefile))
                     os.remove(self.imagefile)
                 else:
-                    self.print_func("Image file {} already exists! Skipping build.".format(self.imagefile))
+                    self.eprint.yellow("Image file {} already exists! Skipping build.".format(self.imagefile))
                     return
 
         credentials = self.description.get("build").get("credentials")
@@ -116,13 +131,13 @@ class Pipeline():
             raise RuntimeError("Singularity build failed (exit code {})".format(ret_code))
 
         if self.dry_run:
-            self.print_func("# Dry-run of building image {} complete.\n".format(self.imagefile))
+            self.eprint.bold("# Dry-run of building image {} complete.\n".format(self.imagefile))
         else:
-            self.print_func("# Successfully built image {}.\n".format(self.imagefile))
+            self.eprint.bold("# Successfully built image {}.\n".format(self.imagefile))
 
     def run(self):
         """Run built pipeline according to description."""
-        self.print_func("# Running pipeline...\n")
+        self.eprint.bold("# Running pipeline...\n")
 
         if not self.dry_run:
             if os.path.isfile(self.imagefile):
@@ -139,18 +154,18 @@ class Pipeline():
             raise RuntimeError("Singularity run failed (step {}, exit code {})".format(step + 1, ret_code))
 
         if self.dry_run:
-            self.print_func("# Dry-run of running image {} complete.\n".format(self.imagefile))
+            self.eprint.bold("# Dry-run of running image {} complete.\n".format(self.imagefile))
         else:
-            self.print_func("# Successfully ran {}.\n".format(self.description.get("name")))
+            self.eprint.bold("# Successfully ran {}.\n".format(self.description.get("name")))
 
     def test(self, force=False, skip_run=False):
         """Run defined tests against the pipeline according to description."""
-        self.print_func("# Testing pipeline...\n")
+        self.eprint.bold("# Testing pipeline...\n")
 
         test_files = self.description.get("test").get("test_files")
 
         if not self.__check_files_exist(test_files) or force:
-            self.print_func("(Re)creating test files...")
+            self.eprint.bold("(Re)creating test files...")
 
             test_prepare = self.description.get("test").get("prepare_commands")
             ret_code, step = self.__run_batch(test_prepare)
@@ -158,14 +173,14 @@ class Pipeline():
             if not self.dry_run and not self.__check_files_exist(test_files):
                 raise RuntimeError("Test files not generated by prepare commands")
         else:
-            self.print_func("Test files already exist and will be reused.\n")
+            self.eprint.yellow("Test files already exist and will be reused.\n")
 
         if skip_run:
-            self.print_func("# Skipping run stage.\n")
+            self.eprint.bold("# Skipping run stage.\n")
         else:
             self.run()
 
-        self.print_func("# Running validation stage...\n")
+        self.eprint.bold("# Running validation stage...\n")
 
         test_validate = self.description.get("test").get("validate_commands")
         ret_code, step = self.__run_batch(test_validate)
@@ -173,9 +188,9 @@ class Pipeline():
             raise RuntimeError("Singularity test validation failed (step {}, exit code {})".format(step + 1, ret_code))
 
         if self.dry_run:
-            self.print_func("# Dry-run of validating image {} complete.\n".format(self.imagefile))
+            self.eprint.bold("# Dry-run of validating image {} complete.\n".format(self.imagefile))
         else:
-            self.print_func("# Pipeline {} validated successfully!\n".format(self.imagefile))
+            self.eprint.bold("# Pipeline {} validated successfully!\n".format(self.imagefile))
 
     def __run_batch(self, commands, substitutions={}):
         if not isinstance(commands, list):
@@ -185,12 +200,18 @@ class Pipeline():
         if self.description.get("substitutions"):
             subs.update(self.description.get("substitutions"))
 
+        action = "Executing"
         if self.dry_run:
-            self.print_func("DRY RUN: Commands only displayed, not run.\n")
+            action = "Displaying"
+            self.eprint.yellow("DRY RUN: Commands only displayed, not run.\n")
 
         for step, command in enumerate(commands):
             command = command.format(**subs)
-            self.print_func("Executing step {}:\n{}\n".format(step + 1, command))
+            self.eprint.bold("{action} step {step}:\n  {command}\n".format(
+                action=action,
+                step=step + 1,
+                command=command
+            ))
             if not self.dry_run:
                 ret_code = subprocess.call(command, shell=True)
                 if ret_code:
@@ -200,7 +221,7 @@ class Pipeline():
 
     def check(self):
         """Validate the pipeline description file."""
-        self.print_func("# Checking pipeline file!\n")
+        self.eprint.bold("# Checking pipeline file!\n")
 
         raise NotImplementedError("Checking still in the works.")
 
@@ -255,10 +276,83 @@ class Pipeline():
         return subs
 
 
+def check_singularity():
+    """Check that Singularity is installed and is of >= SUPPORTED_VERSION version"""
+    def to_int(s):
+        """Converts string to int, or 0 if not convertible"""
+        try:
+            return int(s)
+        except ValueError:
+            return 0
+
+    def compare_version(test, target):
+        """Compare that test version (loose semver format) is >= target version."""
+        # Can't use e.g. semver as Singularity is not following SemVer spec
+        test_array = list(map(to_int, re.split("[\.-]", test)))
+        target_array = list(map(to_int, re.split("[\.-]", target)))
+
+        return test_array >= target_array
+
+    try:
+        version = subprocess.check_output(["singularity", "--version"]).strip()
+        if not compare_version(version, SUPPORTED_VERSION):
+            raise ToolError("Singularity version {} is less than minimum supported ({})".format(version, SUPPORTED_VERSION))
+    except subprocess.CalledProcessError as e:
+        raise ToolError(e.output)
+    except OSError as e:
+        raise ToolError(e.strerror)
+    except ValueError as e:
+        raise ToolError("Unexpected format for Singularity version string ({})".format(version))
+
+
 def __main():
     """Main method to be called when running directly.
 
     Expects CLI arguments."""
+    colorama.init()
+    eprint = EPrint()
+
+    args = parse_args(sys.argv[1:])
+
+    if args.command == "template":
+        print(template_pipeline)
+        exit(0)
+
+    try:
+        check_singularity()
+    except ToolError as e:
+        eprint.red("Error when running `singularity`: {}".format(e.error))
+        eprint.yellow("Check your Singularity installation!")
+        sys.exit(1)
+
+    try:
+        try:
+            with open(args.pipeline) as f:
+                pipeline = Pipeline(f, imagefile=args.image, eprint_instance=eprint, dry_run=args.dry_run)
+        except IOError as e:
+            eprint.red("\nCannot open pipeline description {0}: {1}".format(args.pipeline, e.strerror))
+            raise LoadError()
+    except LoadError:
+        eprint.yellow("\nUnable to load pipeline description. Aborting.")
+        sys.exit(1)
+
+    try:
+        if args.command == "build":
+            pipeline.build(force=args.force)
+        elif args.command == "run":
+            pipeline.run()
+        elif args.command == "test":
+            pipeline.test(force=args.force, skip_run=args.skip_run)
+        elif args.command == "check":
+            pipeline.check()
+        else:
+            raise RuntimeError("Unknown command specified")
+    except RuntimeError as e:
+        eprint.red("ERROR: {}".format(e))
+        sys.exit(1)
+
+
+def parse_args(args):
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="Pipeline, a wrapper around Singularity to build, run and test scientific pipelines."
@@ -299,43 +393,7 @@ def __main():
         help="Output the intended command sequence without executing it (default: no)"
     )
 
-    args = parser.parse_args()
-
-    if args.command == "template":
-        print(template_pipeline)
-        exit(0)
-
-    try:
-        with open(args.pipeline) as f:
-            pipeline = Pipeline(f, imagefile=args.image, print_func=eprint, dry_run=args.dry_run)
-    except IOError as e:
-        eprint("Cannot open pipeline description {0}: {1}".format(args.file, e.strerror))
-        raise LoadError()
-    except LoadError:
-        eprint("\nUnable to load pipeline description. Aborting.")
-        sys.exit(1)
-
-    try:
-        if args.command == "build":
-            pipeline.build(force=args.force)
-        elif args.command == "run":
-            pipeline.run()
-        elif args.command == "test":
-            pipeline.test(force=args.force, skip_run=args.skip_run)
-        elif args.command == "check":
-            pipeline.check()
-        else:
-            raise RuntimeError("Unknown command specified")
-    except RuntimeError as e:
-        eprint("ERROR: {}".format(e))
-        sys.exit(1)
-
-
-def eprint(*args, **kwargs):
-    """Print to STDERR.
-
-    Follows same format as print."""
-    print(*args, file=sys.stderr, **kwargs)
+    return parser.parse_args(args)
 
 
 def make_safe_filename(name, lower=False):
@@ -367,7 +425,21 @@ class FormatError(ValueError):
         return self.error
 
 
+class ToolError(RuntimeError):
+    """Exception class for unexpected response from external tools."""
+
+    def __init__(self, error):
+        """Store specific error description."""
+        self.error = error
+
+    def __str__(self):
+        """Print out specific error description as string representation."""
+        return self.error
+
+
 template_pipeline = r'''## Those will be used in default image name
+format_version: 1
+
 name: CowSay
 version: 1
 

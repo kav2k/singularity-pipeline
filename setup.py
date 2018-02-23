@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='singularity-pipeline',
-    version='0.1',
+    version='0.2.0',
     description='A runner script for pipelines using Singularity containers',
     url='https://c4science.ch/diffusion/2915/browse/master/UniBe/',
     author='Alexander Kashev',
@@ -15,7 +15,7 @@ setup(
     ],
     keywords='singularity container runner',
     packages=['singularity_pipeline'],
-    install_requires=['PyYAML>=3.12', 'argparse>=1.4.0'],
+    install_requires=['PyYAML>=3.12', 'argparse>=1.4.0', 'colorama>=0.3'],
     entry_points={
         'console_scripts': [
             'singularity-pipeline = singularity_pipeline.pipeline:__main'

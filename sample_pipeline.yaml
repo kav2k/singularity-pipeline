@@ -1,4 +1,6 @@
 ## Those will be used in default image name
+format_version: 1
+
 name: CowSay
 version: 1
 
