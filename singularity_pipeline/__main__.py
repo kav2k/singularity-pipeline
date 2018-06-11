@@ -1,6 +1,7 @@
 from .pipeline import Pipeline, ToolError, LoadError, check_singularity
 from .eprint import EPrint
-from .templates import template_pipeline
+from .templates import template_pipeline, template_version
+from . import __version__
 
 import colorama
 import sys
@@ -59,6 +60,16 @@ def parse_args(args):
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="Pipeline, a wrapper around Singularity to build, run and test scientific pipelines."
     )
+
+    try:
+        singularity_version = check_singularity()
+    except ToolError:
+        singularity_version = "Unknown/unsupported"
+
+    parser.add_argument('-v', '--version', action='version', version=template_version.format(
+        version=__version__,
+        singularity_version=singularity_version
+    ))
 
     parser.add_argument(
         "command",

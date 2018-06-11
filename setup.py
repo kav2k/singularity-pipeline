@@ -1,8 +1,9 @@
 from setuptools import setup
+from singularity_pipeline import __version__
 
 setup(
     name='singularity-pipeline',
-    version='0.2.0',
+    version=__version__,
     description='A runner script for pipelines using Singularity containers',
     url='https://github.com/kav2k/singularity-pipeline',
     author='Alexander Kashev',

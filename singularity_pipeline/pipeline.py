@@ -289,9 +289,10 @@ def check_singularity():
         return test_array >= target_array
 
     try:
-        version = subprocess.check_output(["singularity", "--version"]).strip()
+        version = subprocess.check_output(["singularity", "--version"]).strip().decode("utf-8")
         if not compare_version(version, SUPPORTED_VERSION):
             raise ToolError("Singularity version {} is less than minimum supported ({})".format(version, SUPPORTED_VERSION))
+        return version
     except subprocess.CalledProcessError as e:
         raise ToolError(e.output)
     except OSError as e:

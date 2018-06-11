@@ -70,3 +70,11 @@ test:
   ## An array of scripts to be executed in shell after running
   validate_commands:
     - "md5sum -c cowsay.md5"'''
+
+template_version = r'''
+%(prog)s version {version}
+Singularity version {singularity_version}
+
+Copyright (c) 2017-2018 Alexander Kashev
+Created for the EnhanceR project: https://www.enhancer.ch/
+'''
