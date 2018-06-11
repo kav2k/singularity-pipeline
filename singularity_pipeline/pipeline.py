@@ -136,7 +136,7 @@ class Pipeline():
         self.eprint.bold("# Running pipeline...\n")
 
         if not self.dry_run:
-            if os.path.isfile(self.imagefile):
+            if not os.path.isfile(self.imagefile):
                 raise RuntimeError("Image {} does not exist".format(self.imagefile))
 
             for spec in self.binds:
