@@ -18,7 +18,7 @@ setup(
     install_requires=['PyYAML>=3.12', 'argparse>=1.4.0', 'colorama>=0.3'],
     entry_points={
         'console_scripts': [
-            'singularity-pipeline = singularity_pipeline.pipeline:__main'
+            'singularity-pipeline = singularity_pipeline.__main__:__main'
         ]
     }
 )
