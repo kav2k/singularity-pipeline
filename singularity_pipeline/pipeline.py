@@ -102,6 +102,8 @@ class Pipeline():
             build_calls = ["singularity pull {size} {options} --name {image} {source}"]
         elif build_type == "bootstrap":
             build_calls = ["singularity create -F {size} {image}", "sudo singularity bootstrap {options} {image} {source}"]
+        elif build_type == "build":
+            build_calls = ["sudo singularity build {options} {image} {source}"]
         elif build_type == "docker2singularity":
             build_calls = [
                 "sudo docker build -t {docker_name} -f {source} .",

@@ -30,7 +30,7 @@ build:
   ## Extra options to pass to corresponding singularity build command; string
   # options: "--some-option"
 
-  ## For bootstrap, should be a local Singularity file
+  ## For build, should be a local Singularity file
   ## For pull, shub / docker URL
   ## For docker2singularity, should be a local Dockerfile file
   source: docker://chuanwen/cowsay
