@@ -62,8 +62,9 @@ class Pipeline():
         """Validate dict-parsed pipeline description."""
         format_version = description.get("format_version")
         if not format_version:
-            raise FormatError("Format version not specified; expected {}".format(FORMAT_VERSION))
-        elif format_version != FORMAT_VERSION:
+            format_version = 1  # Assuming format version 1 if not specified
+        
+        if format_version != FORMAT_VERSION:
             raise FormatError("Incompatible format version {}; expected {}".format(format_version, FORMAT_VERSION))
 
         for attribute in ["name", "version", "build", "run", "test"]:
