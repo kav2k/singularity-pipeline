@@ -4,7 +4,7 @@ setup(
     name='singularity-pipeline',
     version='0.2.0',
     description='A runner script for pipelines using Singularity containers',
-    url='https://c4science.ch/diffusion/2915/browse/master/UniBe/',
+    url='https://github.com/kav2k/singularity-pipeline',
     author='Alexander Kashev',
     author_email='alexander.kashev@math.unibe.ch',
     license='MIT',
